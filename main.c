@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "portaudio.h"
 #include "network.h"
 #define NUM_SECONDS (30)
@@ -16,7 +17,7 @@ static int paTestCallback( const void *inputBuffer, void *outputBuffer,
     return 0;
 }
 
-int main(){
+int main(){/*
 	PaError error;
 	if((error = Pa_Initialize()) != paNoError){
 		printf("%s\n", Pa_GetErrorText(error));
@@ -45,7 +46,33 @@ int main(){
 	if(error = (Pa_Terminate()) != paNoError){
 		printf("%s\n", Pa_GetErrorText(error));
 		return 1;
-	};
-	return 0;
+	};*/
+	Neuron neuron;
+	if(initNeuron(&neuron,10) == NEURON_ERROR){
+		printf("Neuron error\n");
+		return 1;
+	}
 	
+	double inputs [10];
+
+	double result = 0;
+	for(int i=0; i<10; i++){
+		inputs[i]=2.0;
+	}
+	
+	for(int i=0; i<neuron.inputsAmount; i++){
+		printf("%f\n", neuron.inputWeights[i]);
+	}
+
+	if(calcNeuronOutput(&neuron,inputs,&result) == NEURON_ERROR){
+		printf("Neuron error\n");
+		return 1;
+	}
+
+	printf("Result: %f\n",result);
+	if(destroyNeuron(&neuron) == NEURON_ERROR){
+		printf("Neuron error\n");
+		return 1;
+	}
+	return 0;
 }
