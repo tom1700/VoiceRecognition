@@ -47,31 +47,14 @@ int main(){/*
 		printf("%s\n", Pa_GetErrorText(error));
 		return 1;
 	};*/
-	Neuron neuron;
-	if(initNeuron(&neuron,10) == NEURON_ERROR){
-		printf("Neuron error\n");
+	Perceptron perceptron;
+	if(initPerceptron(&perceptron,1,1,1) != PERCEPTRON_NO_ERROR){
+		printf("Init perceptron error\n");
 		return 1;
 	}
-	
-	double inputs [10];
-
-	double result = 0;
-	for(int i=0; i<10; i++){
-		inputs[i]=2.0;
-	}
-	
-	for(int i=0; i<neuron.inputsAmount; i++){
-		printf("%f\n", neuron.inputWeights[i]);
-	}
-
-	if(calcNeuronOutput(&neuron,inputs,&result) == NEURON_ERROR){
-		printf("Neuron error\n");
-		return 1;
-	}
-
-	printf("Result: %f\n",result);
-	if(destroyNeuron(&neuron) == NEURON_ERROR){
-		printf("Neuron error\n");
+	printPerceptronOutputLayer(&perceptron);
+	if(destroyPerceptron(&perceptron) != PERCEPTRON_NO_ERROR){
+		printf("Destroy perceptron error\n");
 		return 1;
 	}
 	return 0;
