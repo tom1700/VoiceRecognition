@@ -5,6 +5,7 @@ typedef struct Neuron{
 	int inputsAmount;
 	double * inputWeights;
 	double output;
+	double error;
 } Neuron;
 
 typedef struct Perceptron{
@@ -16,6 +17,11 @@ typedef struct Perceptron{
 	Neuron * outputLayer;
 }Perceptron;
 
+double sigmoidFunction(double t);
+double sigmoidDerivative(double t);
+double getError(double output, double properOutput);
+
+
 int initNeuron(Neuron * neuron, int prevLayerSize);
 int activateNeuron(Neuron * neuron, Neuron * prevLayer);
 int destroyNeuron(Neuron * neuron);
@@ -23,5 +29,6 @@ int destroyNeuron(Neuron * neuron);
 int initPerceptron(Perceptron * perceptron, int inputSize, int hiddenSize, int outputSize);
 int setPerceptronInputLayer(Perceptron * perceptron, double * input);
 int activatePerceptron(Perceptron * perceptron);
+int propagatePerceptronError(Perceptron * perceptron, double * properOutput, double learningRate);
 int printPerceptronOutputLayer(Perceptron * perceptron);
 int destroyPerceptron(Perceptron * perceptron);

@@ -4,14 +4,23 @@
 #include <math.h>
 #include "network.h"
 
+double sigmoidFunction(double t){
+	return 1/(1 + exp(-1 * t));
+}
+
+double getError(double output, double properOutput){
+	return pow(output - properOutput, 2);
+}
+
+
 int initNeuron(Neuron * neuron, int prevLayerSize){
 	srand(time(NULL));
-
+	
 	neuron->inputsAmount = prevLayerSize;
-	neuron->inputWeights = malloc(sizeof(float) * neuron->inputsAmount);
+	neuron->inputWeights = malloc(sizeof(double) * (neuron->inputsAmount + 1));
 	neuron->output = 0.0;
 
-	for(int i = 0; i < neuron->inputsAmount; i++){
+	for(int i = 0; i <= neuron->inputsAmount; i++){
 		neuron->inputWeights[i] = pow(-1.0,rand()%2) * (double)rand() / RAND_MAX;
 	}
 	
@@ -19,19 +28,14 @@ int initNeuron(Neuron * neuron, int prevLayerSize){
 
 }
 
-double SigmoidFunction(double t){
-	return 1/(1 + exp(-1 * t));
-}
-
 int activateNeuron(Neuron * neuron, Neuron * prevLayer){
-	double output = 0.0;
+	double output = neuron->inputWeights[0];
 	
 	for(int i = 0; i < neuron->inputsAmount; i++){
-		output += neuron->inputWeights[i] * prevLayer[i].output;
+		output += neuron->inputWeights[i+1] * prevLayer[i].output;
 	}
 	
-	neuron->output = SigmoidFunction(output);
-	
+	neuron->output = sigmoidFunction(output);
 	return NEURON_NO_ERROR;
 }
 
@@ -74,12 +78,43 @@ int setPerceptronInputLayer(Perceptron * perceptron, double * input){
 }
 
 int activatePerceptron(Perceptron * perceptron){
+	for(int i = 0; i < perceptron->hiddenSize; i++){
+		activateNeuron(&perceptron->hiddenLayer[i], perceptron->inputLayer);
+	}
+	for(int i = 0; i < perceptron->outputSize; i++){
+		activateNeuron(&perceptron->outputLayer[i], perceptron->hiddenLayer);
+	}
+	return PERCEPTRON_NO_ERROR;
+}
+
+int propagatePerceptronError(Perceptron * perceptron, double * properOutput, double learningRate){
+	for (int i = 0; i < perceptron->outputSize; i++){
+		perceptron->outputLayer[i].error = (properOutput[i] - perceptron->outputLayer[i].output) * perceptron->outputLayer[i].output * (1.0 - perceptron->outputLayer[i].output);
+	}
+	for (int i = 0; i < perceptron->hiddenSize; i++){
+		perceptron->hiddenLayer[i].error = 0.0;
+		for(int j = 0; j < perceptron->outputSize; j++){
+			perceptron->hiddenLayer[i].error += perceptron->outputLayer[j].error * perceptron->outputLayer[j].inputWeights[i+1];
+		}
+	}
+	for (int i = 0; i < perceptron->hiddenSize; i++){
+		perceptron->hiddenLayer[i].inputWeights[0] += (0.5 * perceptron->hiddenLayer[i].error + learningRate * perceptron->hiddenLayer[i].inputWeights[0]);
+		for(int j = 0; j < perceptron->hiddenLayer[i].inputsAmount; j++){
+			perceptron->hiddenLayer[i].inputWeights[j+1] += (0.5 * perceptron->hiddenLayer[i].error * perceptron->inputLayer[j].output + learningRate * perceptron->hiddenLayer[i].inputWeights[j+1]);
+		}
+	}
+	for (int i = 0; i < perceptron->outputSize; i++){
+		perceptron->outputLayer[i].inputWeights[0] += (0.5 * perceptron->outputLayer[i].error + learningRate * perceptron->outputLayer[i].inputWeights[0]);
+		for(int j = 1; j < perceptron->outputLayer[i].inputsAmount; j++){
+			perceptron->outputLayer[i].inputWeights[j+1] += (0.5 * perceptron->outputLayer[i].error * perceptron->hiddenLayer[j].output + learningRate * perceptron->outputLayer[i].inputWeights[j+1]);
+		}
+	}
 	return PERCEPTRON_NO_ERROR;
 }
 
 int printPerceptronOutputLayer(Perceptron * perceptron){
 	for(int i = 0; i < perceptron->outputSize; i++){
-		printf("%d ",perceptron->outputLayer[i].output);
+		printf("%f ",perceptron->outputLayer[i].output);
 	}
 	printf("\n");
 
