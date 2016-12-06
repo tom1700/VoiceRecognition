@@ -4,6 +4,7 @@
 #include <time.h>
 #include <math.h>
 #include <fcntl.h>
+#include <dirent.h>
 
 #define NO_NET_ERR (1)
 #define NET_ERR (0)
@@ -267,24 +268,6 @@ int teach(Network * net, float **inputs, float **outputs, int patternsAmount, in
         }
     }
     
-    for(int j = 0; j < patternsAmount; j++){
-        printf("Input:[");
-        setInput(net, inputs[j]);
-        for(int i = 0; i < net->InputSize; i++){
-            printf("%f ", inputs[j][i]);
-        }
-        printf("]\nOutput:[");
-        activate(net);
-        for(int i = 1; i <= net->OutputSize; i++){
-            printf("%f ", net->Output[i]);
-        }
-        printf("] Proper output:[");
-        for(int i = 0; i < net->OutputSize; i++){
-            printf("%f ", outputs[j][i]);
-        }
-        printf("]\n");
-    }
-    saveNetToFile(net);
     for(int i = 0; i < net->HiddenSize + 1; i++){
         free(deltaWeightIH[i]);
     } 
@@ -299,111 +282,74 @@ int teach(Network * net, float **inputs, float **outputs, int patternsAmount, in
     return NO_NET_ERR;
 }
 
-
-/*
-int network(){
-    int    i, j, k, p, np, op, ranpat[NUMPAT+1], epoch;
-    int    NumPattern = NUMPAT, NumInput = NUMIN, NumHidden = NUMHID, NumOutput = NUMOUT;
-    float Input[NUMPAT+1][NUMIN+1] = { 0, 0, 0,  0, 0, 0,  0, 1, 0,  0, 0, 1,  0, 1, 1 };
-    float Target[NUMPAT+1][NUMOUT+1] = { 0, 0,  0, 0,  0, 1,  0, 1,  0, 0 };
-    float SumH[NUMPAT+1][NUMHID+1], WeightIH[NUMIN+1][NUMHID+1], Hidden[NUMPAT+1][NUMHID+1];
-    float SumO[NUMPAT+1][NUMOUT+1], WeightHO[NUMHID+1][NUMOUT+1], Output[NUMPAT+1][NUMOUT+1];
-    float DeltaO[NUMOUT+1], SumDOW[NUMHID+1], DeltaH[NUMHID+1];
-    float DeltaWeightIH[NUMIN+1][NUMHID+1], DeltaWeightHO[NUMHID+1][NUMOUT+1];
-    float Error, eta = 0.5, alpha = 0.9, smallwt = 0.5;
-  
-    for( j = 1 ; j <= NumHidden ; j++ ) {    // initialize WeightIH and DeltaWeightIH
-        for( i = 0 ; i <= NumInput ; i++ ) { 
-            DeltaWeightIH[i][j] = 0.0 ;
-            WeightIH[i][j] = 2.0 * ( rando() - 0.5 ) * smallwt ;
-        }
+int loadTrainingDataFromDir(float      ***inputs, 
+                            float      ***outputs, 
+                            const char * dirName, 
+                            int        * trainingPatterns, 
+                            int        outputIndex){
+    char pathname[1024];
+    DIR *pDir;
+    FILE *fp;
+    int len;
+    struct dirent *pDirent;    
+    if ((pDir = opendir(dirName)) == NULL) {
+        printf ("Cannot open directory '%s'\n", dirName);
+        return 0;
     }
-    for( k = 1 ; k <= NumOutput ; k ++ ) {    // initialize WeightHO and DeltaWeightHO
-        for( j = 0 ; j <= NumHidden ; j++ ) {
-            DeltaWeightHO[j][k] = 0.0 ;              
-            WeightHO[j][k] = 2.0 * ( rando() - 0.5 ) * smallwt ;
-        }
-    }
-     
-    for( epoch = 0 ; epoch < 100000 ; epoch++) {    // iterate weight updates 
-        for( p = 1 ; p <= NumPattern ; p++ ) {    // randomize order of individuals 
-            ranpat[p] = p ;
-        }
-        for( p = 1 ; p <= NumPattern ; p++) {
-            np = p + rando() * ( NumPattern + 1 - p ) ;
-            op = ranpat[p] ; ranpat[p] = ranpat[np] ; ranpat[np] = op ;
-        }
-        Error = 0.0 ;
-        for( np = 1 ; np <= NumPattern ; np++ ) {    // repeat for all the training patterns 
-            p = ranpat[np];
-            for( j = 1 ; j <= NumHidden ; j++ ) {    // compute hidden unit activations 
-                SumH[p][j] = WeightIH[0][j] ;
-                for( i = 1 ; i <= NumInput ; i++ ) {
-                    SumH[p][j] += Input[p][i] * WeightIH[i][j] ;
-                }
-                Hidden[p][j] = 1.0/(1.0 + exp(-SumH[p][j])) ;
+    while ((pDirent = readdir(pDir)) != NULL) {
+        if(strcmp(pDirent->d_name,".") != 0 && strcmp(pDirent->d_name,"..") != 0){
+            (*inputs) = realloc((*inputs), ((*trainingPatterns) + 1) * sizeof(float*));
+            (*inputs) = realloc((*outputs), ((*trainingPatterns) + 1) * sizeof(float*));
+            
+            sprintf(pathname, "%s/%s", dirName, pDirent->d_name );
+            if ((fp = fopen(pathname, "rb")) == NULL) {
+                printf ("Cannot open file '%s'\n", pDirent->d_name);
+                return 0;
             }
-            for( k = 1 ; k <= NumOutput ; k++ ) {    // compute output unit activations and errors 
-                SumO[p][k] = WeightHO[0][k] ;
-                for( j = 1 ; j <= NumHidden ; j++ ) {
-                    SumO[p][k] += Hidden[p][j] * WeightHO[j][k] ;
-                }
-                Output[p][k] = 1.0/(1.0 + exp(-SumO[p][k])) ;   // Sigmoidal Outputs
-                //Output[p][k] = SumO[p][k];      Linear Outputs
-                Error += 0.5 * (Target[p][k] - Output[p][k]) * (Target[p][k] - Output[p][k]) ;   // SSE 
-                //Error -= ( Target[p][k] * log( Output[p][k] ) + ( 1.0 - Target[p][k] ) * log( 1.0 - Output[p][k] ) ) ;    Cross-Entropy Error
-                DeltaO[k] = (Target[p][k] - Output[p][k]) * Output[p][k] * (1.0 - Output[p][k]) ;   /* Sigmoidal Outputs, SSE
-                //DeltaO[k] = Target[p][k] - Output[p][k];     Sigmoidal Outputs, Cross-Entropy Error
-                //DeltaO[k] = Target[p][k] - Output[p][k];     Linear Outputs, SSE
+            memset(pathname, 0, 1024);
+            if(((*inputs)[*trainingPatterns] = malloc(66150 * (sizeof(float)))) == NULL){
+                perror("Loading data memory allocation");
+                exit(1);
             }
-            for( j = 1 ; j <= NumHidden ; j++ ) {    // 'back-propagate' errors to hidden layer
-                SumDOW[j] = 0.0 ;
-                for( k = 1 ; k <= NumOutput ; k++ ) {
-                    SumDOW[j] += WeightHO[j][k] * DeltaO[k] ;
-                }
-                DeltaH[j] = SumDOW[j] * Hidden[p][j] * (1.0 - Hidden[p][j]) ;
+            if(((*outputs)[*trainingPatterns] = malloc(4 * (sizeof(float)))) == NULL){
+                perror("Loading data memory allocation");
+                exit(1);
             }
-            for( j = 1 ; j <= NumHidden ; j++ ) {     /* update weights WeightIH
-                DeltaWeightIH[0][j] = eta * DeltaH[j] + alpha * DeltaWeightIH[0][j] ;
-                WeightIH[0][j] += DeltaWeightIH[0][j] ;
-                for( i = 1 ; i <= NumInput ; i++ ) { 
-                    DeltaWeightIH[i][j] = eta * Input[p][i] * DeltaH[j] + alpha * DeltaWeightIH[i][j];
-                    WeightIH[i][j] += DeltaWeightIH[i][j] ;
-                }
-            }
-            for( k = 1 ; k <= NumOutput ; k ++ ) {    // update weights WeightHO
-                DeltaWeightHO[0][k] = eta * DeltaO[k] + alpha * DeltaWeightHO[0][k] ;
-                WeightHO[0][k] += DeltaWeightHO[0][k] ;
-                for( j = 1 ; j <= NumHidden ; j++ ) {
-                    DeltaWeightHO[j][k] = eta * Hidden[p][j] * DeltaO[k] + alpha * DeltaWeightHO[j][k] ;
-                    WeightHO[j][k] += DeltaWeightHO[j][k] ;
-                }
-            }
-        }
-        if( epoch%100 == 0 ) fprintf(stdout, "\nEpoch %-5d :   Error = %f", epoch, Error) ;
-        if( Error < 0.0004 ) break ;  // stop learning when 'near enough'
-    }
-    
-    fprintf(stdout, "\n\nNETWORK DATA - EPOCH %d\n\nPat\t", epoch) ;   // print network outputs 
-    for( i = 1 ; i <= NumInput ; i++ ) {
-        fprintf(stdout, "Input%-4d\t", i) ;
-    }
-    for( k = 1 ; k <= NumOutput ; k++ ) {
-        fprintf(stdout, "Target%-4d\tOutput%-4d\t", k, k) ;
-    }
-    for( p = 1 ; p <= NumPattern ; p++ ) {        
-    fprintf(stdout, "\n%d\t", p) ;
-        for( i = 1 ; i <= NumInput ; i++ ) {
-            fprintf(stdout, "%f\t", Input[p][i]) ;
-        }
-        for( k = 1 ; k <= NumOutput ; k++ ) {
-            fprintf(stdout, "%f\t%f\t", Target[p][k], Output[p][k]) ;
+            fread((void*)inputs[*trainingPatterns], sizeof(float), 66150, fp);
+            ((*outputs)[*trainingPatterns])[0] = 0.0;
+            ((*outputs)[*trainingPatterns])[1] = 0.0;
+            ((*outputs)[*trainingPatterns])[2] = 0.0;
+            ((*outputs)[*trainingPatterns])[3] = 0.0;
+            ((*outputs)[*trainingPatterns])[outputIndex] = 1.0;
+            fclose(fp);
+            (*trainingPatterns)++;
         }
     }
-    fprintf(stdout, "\n\nGoodbye!\n\n") ;
-    return 1 ;
+    closedir(pDir);
+    return 1;
 }
-*/
+
+int loadTrainingDataFromFiles(float ***inputs, float ***outputs, int *trainingPatterns){
+    const char* dir1Name = "records/training/zapal";
+    const char* dir2Name = "records/training/zgas";
+    const char* dir3Name = "records/training/rozjasnij";
+    const char* dir4Name = "records/training/przyciemnij";
+    *trainingPatterns = 0;
+    (*inputs) = malloc(sizeof(float));
+    (*outputs) = malloc(sizeof(float));
+            
+    //zapal -       [1.0, 0.0, 0.0, 0.0]
+    loadTrainingDataFromDir(inputs, outputs, dir1Name, trainingPatterns, 0);
+    //zgas -        [0.0, 1.0, 0.0, 0.0]
+    loadTrainingDataFromDir(inputs, outputs, dir2Name, trainingPatterns, 1);
+    //rozjasnij -   [0.0, 0.0, 1.0, 0.0]
+    loadTrainingDataFromDir(inputs, outputs, dir3Name, trainingPatterns, 2);
+    //przyciemnij - [0.0, 0.0, 0.0, 1.0]
+    loadTrainingDataFromDir(inputs, outputs, dir4Name, trainingPatterns, 3);
+
+    return 1;
+}
+//-------------------------------------------------Tests------------------------------------------------------------
 int initAndDeleteTest(){
     printf("InitAndDeleteTest:\n");
     Network net;
@@ -568,9 +514,12 @@ int setInputTest(){
     return 1;
 }
 
-int xorTest(int epochs, float eta, float alpha){
+int xorTest(){
     printf("XORTest:\n");
     Network net;
+    static int epochs = 10000;
+    static float eta = 0.2;
+    static float alpha = 0.5;
     static int InputSize = 2;
     static int HiddenSize = 2;
     static int OutputSize = 1;
@@ -592,6 +541,25 @@ int xorTest(int epochs, float eta, float alpha){
     outputs[2][0] = 0.0;
     outputs[3][0] = 1.0;
     teach(&net, inputs, outputs, 4, epochs, eta, alpha);
+    
+    for(int j = 0; j < 4; j++){
+        printf("     Input:[");
+        setInput(&net, inputs[j]);
+        for(int i = 0; i < net.InputSize; i++){
+            printf("%f ", inputs[j][i]);
+        }
+        printf("]\n     Output:[");
+        activate(&net);
+        for(int i = 1; i <= net.OutputSize; i++){
+            printf("%f ", net.Output[i]);
+        }
+        printf("] Target:[");
+        for(int i = 0; i < net.OutputSize; i++){
+            printf("%f ", outputs[j][i]);
+        }
+        printf("]\n");
+    }
+    
     deleteNet(&net);
     for(int i = 0; i < 4; i++){
         free(inputs[i]);
@@ -602,8 +570,127 @@ int xorTest(int epochs, float eta, float alpha){
     return 1;
 }
 
+int andTest(){
+    printf("ANDTest:\n");
+    Network net;
+    static int epochs = 10000;
+    static float eta = 0.2;
+    static float alpha = 0.5;
+    static int InputSize = 2;
+    static int HiddenSize = 2;
+    static int OutputSize = 1;
+    initNet(&net, InputSize, HiddenSize, OutputSize);
+    drawWeights(&net);
+    float ** inputs = malloc(sizeof(float*) * 4);
+    float ** outputs = malloc(sizeof(float*) * 4);
+    for(int i = 0; i < 4; i++){
+        inputs[i] = malloc(sizeof(float) * 2);
+        outputs[i] = malloc(sizeof(float) * 2);
+    }
+    inputs[0][0] = 0.0; inputs[0][1] = 0.0;
+    inputs[1][0] = 0.0; inputs[1][1] = 1.0;
+    inputs[3][0] = 1.0; inputs[3][1] = 1.0;
+    inputs[2][0] = 1.0; inputs[2][1] = 0.0;
+
+    outputs[0][0] = 0.0;
+    outputs[1][0] = 0.0;
+    outputs[2][0] = 1.0;
+    outputs[3][0] = 0.0;
+    teach(&net, inputs, outputs, 4, epochs, eta, alpha);
+    
+    for(int j = 0; j < 4; j++){
+        printf("     Input:[");
+        setInput(&net, inputs[j]);
+        for(int i = 0; i < net.InputSize; i++){
+            printf("%f ", inputs[j][i]);
+        }
+        printf("]\n     Output:[");
+        activate(&net);
+        for(int i = 1; i <= net.OutputSize; i++){
+            printf("%f ", net.Output[i]);
+        }
+        printf("] Target:[");
+        for(int i = 0; i < net.OutputSize; i++){
+            printf("%f ", outputs[j][i]);
+        }
+        printf("]\n");
+    }
+    
+    deleteNet(&net);
+    for(int i = 0; i < 4; i++){
+        free(inputs[i]);
+        free(outputs[i]);
+    }
+    free(inputs);
+    free(outputs);
+    return 1;
+}
+
+int dirTest(){
+    printf("DirTest:\n");
+    float **inputs;
+    float **outputs;
+    int patternsAmount;
+    if(loadTrainingDataFromFiles(&inputs, &outputs, &patternsAmount) == 0){
+        return 0;
+    }
+    for(int i = 0; i < patternsAmount; i++){
+        printf("Pattern:%d Output:[%f, %f, %f, %f]\n", i, outputs[i][0], outputs[i][1], outputs[i][2], outputs[i][3]);
+    }
+    for(int i = 0; i < patternsAmount; i++){
+        free(inputs[i]);
+        free(outputs[i]);
+    }
+    free(inputs);
+    free(outputs);
+    return 1;
+}
+
+int finalTest(const char * arg){
+    static int epochs = 10000;
+    static float eta = 0.1;
+    static float alpha = 0.5;
+    float **inputs;
+    float **outputs;
+    int patternsAmount;
+    Network net;
+    initNet(&net, 66150, 100, 4);
+    if(strcmp(arg, "-l") == 0){
+        loadNetFromFile(&net);
+    }
+    else{
+        drawWeights(&net);
+    }
+    loadTrainingDataFromFiles(&inputs, &outputs, &patternsAmount);
+    teach(&net, inputs, outputs, patternsAmount, epochs, eta, alpha);
+
+    for(int i = 0; i < patternsAmount; i++){
+        setInput(&net, inputs[i]);
+        activate(&net);
+        printf("Pattern:%d Outputs:[%f, %f, %f, %f] Target:[%f, %f, %f, %f]",
+            i,
+            net.Output[1],
+            net.Output[2],
+            net.Output[3],
+            net.Output[4],
+            outputs[i][0],
+            outputs[i][1],
+            outputs[i][2],
+            outputs[i][3]);
+    }
+    saveNetToFile(&net);
+    deleteNet(&net);
+    for(int i = 0; i < patternsAmount; i++){
+        free(inputs[i]);
+        free(outputs[i]);
+    }
+    free(inputs);
+    free(outputs);
+    return 1;
+}
+
 int main(int argc, char ** argv) {
-	if(initAndDeleteTest()){
+	/*if(initAndDeleteTest()){
         printf("Init and delete network test: SUCCESS\n\n");
     }
     else{
@@ -633,11 +720,29 @@ int main(int argc, char ** argv) {
     else{
         printf("Set input test: FAILED\n\n");
     }
-    if(xorTest(atoi(argv[1]), atof(argv[2]), atof(argv[3]))){
+    if(xorTest()){
         printf("XOR test: SUCCESS\n\n");
     }
     else{
         printf("XOR test: FAILED\n\n");
+    }
+    if(andTest()){
+        printf("AND test: SUCCESS\n\n");
+    }
+    else{
+        printf("AND test: FAILED\n\n");
+    }
+    if(dirTest()){
+        printf("Dir test: SUCCESS\n\n");
+    }
+    else{
+        printf("Dir test: FAILED\n\n");
+    }*/
+    if(argc > 2){
+        finalTest(argv[1]);
+    }
+    else{
+        finalTest("");
     }
     return 0;
 }
